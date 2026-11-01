@@ -11,9 +11,17 @@ node server.js    ← 或手动起服务
 
 ## 在线试玩
 
-<!-- PAGES_URL 占位：开启 GitHub Pages 后填入 -->
+**https://dingdjfjfs-star.github.io/landform-guess/**（GitHub Pages，公开网页无需登录；发给朋友这个链接即可）
 
-整个目录就是一个纯静态站点，GitHub Pages / 任意静态托管都能直接跑；本仓库已提交全部源码与构建工具（`tools/`）。
+本地试玩：双击 `启动.bat`（或 `node server.js` → http://127.0.0.1:8942）。整个目录就是一个纯静态站点，GitHub Pages / 任意静态托管都能直接跑；本仓库已提交全部源码与构建工具（`tools/`）。
+
+## 部署（GitHub Pages）
+
+```bash
+git push origin main                  # 推送源码（重试直到穿透网络波动）
+node tools/deploy-github.js pages     # 首次开启 Pages（main 根目录）
+node tools/deploy-github.js wait      # 轮询站点就绪
+```
 
 ## 玩法
 
