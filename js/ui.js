@@ -95,6 +95,41 @@
   }
 
   var $ = function (id) { return document.getElementById(id); };
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- 存档（localStorage 自动保存 + 导出/导入搬运） ----------
+  var SAVE_KEY = 'gdz-save-v1', PROFILE_KEY = 'gdz-profile-v1';
+  function loadJSON(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+  function saveJSON(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 隐私模式等 */ } }
+  function saveRound() {
+    if (state && (state.phase === 'playing' || state.phase === 'revealed')) {
+      saveJSON(SAVE_KEY, { state: state, at: Date.now() });
+    }
+  }
+  function clearRound() { saveJSON(SAVE_KEY, null); }
+  // 生涯战绩：按"会话 id:页序"为键合并各次对局的 results，天然去重、可断点续记
+  function syncProfile() {
+    if (!state) return;
+    var p = loadJSON(PROFILE_KEY) || { map: {} };
+    p.map = p.map || {};
+    state.results.forEach(function (r, i) {
+      var key = (state.sid || 's') + ':' + i;
+      if (!p.map[key]) p.map[key] = { id: r.id, s: r.score, c: r.correct ? 1 : 0 };
+    });
+    saveJSON(PROFILE_KEY, p);
+  }
+  function career() {
+    var p = loadJSON(PROFILE_KEY) || { map: {} };
+    var t = { score: 0, played: 0, correct: 0, perfect: 0, best: 0, cur: 0 };
+    Object.keys(p.map).forEach(function (k) {
+      var r = p.map[k];
+      t.score += r.s; t.played++;
+      if (r.c) { t.correct++; t.cur++; if (t.cur > t.best) t.best = t.cur; } else t.cur = 0;
+      if (r.s === 100) t.perfect++;
+    });
+    return t;
+  }
+
   function show(id, on) { $(id).classList.toggle('hidden', !on); }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function byId(id) { for (var i = 0; i < BANK.length; i++) if (BANK[i].id === id) return BANK[i]; return null; }
@@ -102,6 +137,22 @@
   // ---------- 开局设置 ----------
   function buildSetup() {
     $('setupCount').textContent = BANK.length;
+    // 生涯战绩
+    var c = career();
+    var careerEl = $('careerLine');
+    if (c.played) {
+      careerEl.textContent = '生涯战绩：' + c.score + ' 分 · 已玩 ' + c.played + ' 页 · 答对 ' + c.correct +
+        ' · 一击命中 ' + c.perfect + ' · 最长连对 ' + c.best;
+      careerEl.classList.remove('hidden');
+    } else careerEl.classList.add('hidden');
+    // 继续上次
+    var save = loadJSON(SAVE_KEY);
+    var row = $('resumeRow');
+    if (save && save.state && (save.state.phase === 'playing' || save.state.phase === 'revealed')) {
+      $('resumeInfo').textContent = '上次玩到第 ' + Math.min(save.state.pos + 1, save.state.queue.length) +
+        ' / ' + save.state.queue.length + ' 页 · 本局积分 ' + save.state.totals.score;
+      row.classList.remove('hidden');
+    } else row.classList.add('hidden');
     var cats = [''].concat((window.QBANK.meta && window.QBANK.meta.cats) || []);
     var wrap = $('catChips'); wrap.innerHTML = '';
     cats.forEach(function (c) {
@@ -178,6 +229,8 @@
     $('guessInput').disabled = state.phase !== 'playing';
 
     if (state.phase === 'revealed') renderReveal(q, v);
+    syncProfile();
+    saveRound();
     return v;
   }
 
@@ -293,6 +346,12 @@
       '批注里点过 ' + t.typeHit + ' 次地貌类型、' + t.regionHit + ' 次大区。' +
       (t.played ? '<table><tr><th>#</th><th>页码</th><th>结果</th><th>记分</th></tr>' + rows + '</table>' : '');
     renderBadges();
+    var c = career();
+    $('summaryBody').innerHTML +=
+      '<div class="career">生涯累计：' + c.score + ' 分 · ' + c.played + ' 页 · 答对 ' + c.correct +
+      ' · 一击命中 ' + c.perfect + ' · 最长连对 ' + c.best + '</div>';
+    syncProfile();
+    clearRound(); // 合上本册：续玩存档清掉，生涯战绩已入册
     renderHud({ totals: t, phase: 'board', pos: 0, queueLen: state.queue.length, seed: state.seed });
   }
 
@@ -346,9 +405,37 @@
     var seedRaw = $('seedInput').value.trim();
     var seed = seedRaw === '' ? 0 : (parseInt(seedRaw, 10) >>> 0);
     state = Engine.newGame(BANK, { seed: seed, cat: selCat || null, diff: selDiff || null });
+    state.sid = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
+    clearRound(); // 新局覆盖上次的续玩存档（生涯战绩已同步，不受影响）
     show('hero', false);
     renderGame();
     window.scrollTo({ top: 0 });
+  }
+  function actResume() {
+    var save = loadJSON(SAVE_KEY);
+    if (!save || !save.state) return;
+    // 校验：题库版本变了（队列出图失败）就丢弃旧档
+    var ok = (save.state.queue || []).every(function (id) { return byId(id); });
+    if (!ok) { clearRound(); buildSetup(); return; }
+    state = save.state;
+    renderGame();
+    window.scrollTo({ top: 0 });
+  }
+  function actExport() {
+    var payload = { v: 1, profile: loadJSON(PROFILE_KEY), save: loadJSON(SAVE_KEY) };
+    var code = JSON.stringify(payload);
+    window.prompt('全选复制这段存档码，发给朋友或自己存好：', code);
+  }
+  function actImport() {
+    var code = window.prompt('粘贴存档码：', '');
+    if (!code) return;
+    try {
+      var payload = JSON.parse(code.trim());
+      if (!payload || (!payload.profile && !payload.save)) throw new Error('格式不对');
+      if (payload.profile) saveJSON(PROFILE_KEY, payload.profile);
+      if (payload.save) saveJSON(SAVE_KEY, payload.save); else clearRound();
+      location.reload();
+    } catch (e) { showToast('存档码无效'); }
   }
   function actRestart() {
     applyCat('');
@@ -365,6 +452,9 @@
 
   // ---------- 绑定 ----------
   $('btnStart').onclick = actStart;
+  $('btnResume').onclick = actResume;
+  $('btnExport').onclick = actExport;
+  $('btnImport').onclick = actImport;
   $('btnClue').onclick = actClue;
   $('btnHint').onclick = actHint;
   $('btnGiveUp').onclick = actGiveUp;
@@ -374,6 +464,7 @@
   $('btnSfx').onclick = actSfx;
   $('btnTheme').onclick = function () { applyTheme(!document.body.classList.contains('light'), true); };
   $('guessInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') actGuess(); });
+  window.addEventListener('pagehide', function () { saveRound(); syncProfile(); }); // 关页兜底存档
 
   // ---------- 初始化偏好 ----------
   var savedTheme = '';

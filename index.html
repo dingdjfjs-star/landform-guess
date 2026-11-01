@@ -79,6 +79,11 @@
   <section id="setup" class="panel">
     <h2>翻开新一页</h2>
     <p class="tip">老队长心里藏了一处地方，一格一格给你递线索；你猜地名，他判对错、记分、写批注。册子里共 <b id="setupCount">?</b> 页地貌——喀斯特、丹霞、红树林、潮滩、黄土塬、冰川峡湾……猜对有分，翻底牌白给。</p>
+    <div id="resumeRow" class="resume-row hidden">
+      <button id="btnResume" class="primary">继续上次 →</button>
+      <span id="resumeInfo" class="tip-inline"></span>
+    </div>
+    <div id="careerLine" class="career hidden"></div>
     <div class="field">
       <label>地貌类别</label>
       <div id="catChips" class="chips"></div>
@@ -91,6 +96,11 @@
       <label for="seedInput">底本编号</label>
       <input id="seedInput" type="number" min="0" placeholder="留空 = 随机">
       <span class="tip-inline">同一编号，出题顺序分毫不差</span>
+    </div>
+    <div class="field row">
+      <button id="btnExport" class="ghost">导出存档</button>
+      <button id="btnImport" class="ghost">导入存档</button>
+      <span class="tip-inline">进度自动存在这台设备的浏览器里；换设备/换浏览器用导出·导入搬运</span>
     </div>
     <button id="btnStart" class="primary big">开拔 →</button>
   </section>
