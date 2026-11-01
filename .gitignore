@@ -1,0 +1,10 @@
+# 版权文件：用户从网上下载的参考照片，不入库（界面配色/构图仅作灵感来源，未嵌入任何摄影图）
+参考图/
+tools/_raw/photos/
+
+# 本地临时与缓存
+test_out.txt
+*.log
+Thumbs.db
+desktop.ini
+tools/_raw/photos/
